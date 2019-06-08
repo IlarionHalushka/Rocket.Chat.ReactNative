@@ -1,8 +1,7 @@
 const {
-	device, expect, element, by, waitFor
+	expect, element, by, waitFor
 } = require('detox');
 const { takeScreenshot } = require('./helpers/screenshot');
-const data = require('./data');
 
 describe('Forgot password screen', () => {
 	before(async() => {
