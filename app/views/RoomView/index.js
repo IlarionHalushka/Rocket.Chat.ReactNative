@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { connect } from 'react-redux';
 import { RectButton } from 'react-native-gesture-handler';
-import { SafeAreaView } from 'react-navigation';
+import { SafeAreaView, HeaderBackButton } from 'react-navigation';
 import equal from 'deep-equal';
 import moment from 'moment';
 import EJSON from 'ejson';
@@ -34,7 +34,7 @@ import I18n from '../../i18n';
 import RoomHeaderView, { RightButtons } from './Header';
 import StatusBar from '../../containers/StatusBar';
 import Separator from './Separator';
-import { COLOR_WHITE } from '../../constants/colors';
+import { COLOR_WHITE, HEADER_BACK } from '../../constants/colors';
 import debounce from '../../utils/debounce';
 import buildMessage from '../../lib/methods/helpers/buildMessage';
 import FileModal from '../../containers/FileModal';
@@ -76,8 +76,13 @@ export default class RoomView extends React.Component {
 		const t = navigation.getParam('t');
 		const tmid = navigation.getParam('tmid');
 		const toggleFollowThread = navigation.getParam('toggleFollowThread', () => {});
+		const unreadsCount = navigation.getParam('unreadsCount') > 0 ? navigation.getParam('unreadsCount') : null;
+
 		return {
-			headerTitleContainerStyle: styles.headerTitleContainerStyle,
+			headerLeftContainerStyle: {
+				position: 'relative',
+				backgroundColor: 'white'
+			},
 			headerTitle: (
 				<RoomHeaderView
 					rid={rid}
@@ -85,7 +90,6 @@ export default class RoomView extends React.Component {
 					tmid={tmid}
 					title={title}
 					type={t}
-					widthOffset={tmid ? 95 : 130}
 				/>
 			),
 			headerRight: (
@@ -96,6 +100,19 @@ export default class RoomView extends React.Component {
 					navigation={navigation}
 					toggleFollowThread={toggleFollowThread}
 				/>
+			),
+			headerLeft: (
+				<View onLayout={(event) => {
+					console.warn(event.nativeEvent.layout);
+				}}
+				>
+					<HeaderBackButton
+						title={unreadsCount > 99 ? '+99' : unreadsCount}
+						backTitleVisible
+						onPress={() => navigation.goBack()}
+						tintColor={HEADER_BACK}
+					/>
+				</View>
 			)
 		};
 	}
@@ -135,6 +152,7 @@ export default class RoomView extends React.Component {
 		this.t = props.navigation.getParam('t');
 		this.tmid = props.navigation.getParam('tmid');
 		this.rooms = database.objects('subscriptions').filtered('rid = $0', this.rid);
+		this.chats = database.objects('subscriptions').filtered('rid != $0', this.rid);
 		this.state = {
 			joined: this.rooms.length > 0,
 			room: this.rooms[0] || { rid: this.rid, t: this.t },
@@ -170,6 +188,7 @@ export default class RoomView extends React.Component {
 				EventEmitter.addEventListener('connected', this.handleConnected);
 			}
 			safeAddListener(this.rooms, this.updateRoom);
+			safeAddListener(this.chats, this.updateUnreadCount);
 			this.mounted = true;
 		});
 		console.timeEnd(`${ this.constructor.name } mount`);
@@ -241,6 +260,7 @@ export default class RoomView extends React.Component {
 			}
 		}
 		this.rooms.removeAllListeners();
+		this.chats.removeAllListeners();
 		if (this.sub && this.sub.stop) {
 			this.sub.stop();
 		}
@@ -356,6 +376,17 @@ export default class RoomView extends React.Component {
 			});
 		}
 	}, 1000, true)
+
+	// eslint-disable-next-line react/sort-comp
+	updateUnreadCount = debounce(() => {
+		const { navigation } = this.props;
+		const unreadsCount = this.chats.filtered('archived != true && open == true && unread > 0').reduce((a, b) => a + (b.unread || 0), 0);
+		if (unreadsCount !== navigation.getParam('unreadsCount')) {
+			navigation.setParams({
+				unreadsCount
+			});
+		}
+	}, 300, false)
 
 	replyBroadcast = (message) => {
 		const { replyBroadcast } = this.props;
